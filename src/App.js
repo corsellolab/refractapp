@@ -1,31 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import TableWithPagination from './TableWithPagination';
+import CompoundData from './CompoundData';
 
 const App = () => {
   const [selectedRow, setSelectedRow] = useState(null);
+  const [data, setData] = useState([]);
+
+  // Fetch data from API
+  useEffect(() => {
+    fetch('http://127.0.0.1:5000/compounds')
+      .then((response) => response.json())
+      .then((data) => setData(data));
+  }, []);
 
   const handleRowSelect = (row) => {
     setSelectedRow(row);
-  }
-
-  const data = [
-    { name: 'John Doe', age: 25, email: 'john@example.com' },
-    { name: 'Jane Smith', age: 30, email: 'jane@example.com' },
-    // Add more data rows as needed
-  ];
+  };
 
   return (
     <div>
-      <TableWithPagination data={data} onRowSelect={handleRowSelect} />
-      {selectedRow && (
-        <div>
-          <h2>Selected Row</h2>
-          <p>Name: {selectedRow.name}</p>
-          <p>Age: {selectedRow.age}</p>
-          <p>Email: {selectedRow.email}</p>
-        </div>
-      )
-      }
+      {data.length > 0 ? (
+        <TableWithPagination data={data} onRowSelect={handleRowSelect} />
+      ) : (
+        <p>Loading data...</p>
+      )}
+      <CompoundData row={selectedRow} />
     </div>
   );
 };

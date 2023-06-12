@@ -15,8 +15,8 @@ const TableHeaderCellStyled = styled(TableCell)`
 
 const FilterContainer = styled('div')`
   display: flex;
-  align-items: center;
-  width: 100%;
+  margin: 0 auto;
+  width: 75%;
   margin-bottom: 10px;
 `;
 
@@ -31,13 +31,7 @@ const SelectedRow = styled(TableRow)`
 function TableWithPagination({ data, onRowSelect }) {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [filterTexts, setFilterTexts] = useState(() => {
-    const initialFilterTexts = {};
-    Object.keys(data[0]).forEach((key) => {
-      initialFilterTexts[key] = '';
-    });
-    return initialFilterTexts;
-  });
+  const [filterText, setFilterText] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: '' });
   const [selectedRow, setSelectedRow] = useState(null);
 
@@ -58,11 +52,8 @@ function TableWithPagination({ data, onRowSelect }) {
     setSortConfig({ key, direction });
   };
 
-  const handleFilterTextChange = (key, value) => {
-    setFilterTexts((prevState) => ({
-      ...prevState,
-      [key]: value,
-    }));
+  const handleFilterTextChange = (value) => {
+    setFilterText(value);
   };
 
   const handleRowClick = (row) => {
@@ -70,11 +61,9 @@ function TableWithPagination({ data, onRowSelect }) {
     onRowSelect(row);
   };
 
-  const filteredData = data.filter((row) => {
-    return Object.keys(filterTexts).every((key) =>
-      row[key].toString().toLowerCase().includes(filterTexts[key].toString().toLowerCase())
-    );
-  });
+  const filteredData = data.filter((row) =>
+    row['Drug Name'].toString().toLowerCase().includes(filterText.toString().toLowerCase())
+  );
 
   const sortedData = [...filteredData];
   if (sortConfig.key) {
@@ -92,25 +81,24 @@ function TableWithPagination({ data, onRowSelect }) {
   const offset = page * rowsPerPage;
   const slicedData = sortedData.slice(offset, offset + rowsPerPage);
 
+  const columnOrder = ['Drug Name', 'Pearson R', 'Connectivity']; // Define the desired column order
+
   return (
     <div>
-      <FilterContainer sx={{ justifyContent: 'center' }}>
-        {Object.keys(data[0]).map((key) => (
-          <FilterTextField
-            key={key}
-            label={key}
-            value={filterTexts[key]}
-            onChange={(e) => handleFilterTextChange(key, e.target.value)}
-            variant="outlined"
-            size="small"
-          />
-        ))}
+      <FilterContainer>
+        <FilterTextField
+          label="Filter by drug name"
+          value={filterText}
+          onChange={(e) => handleFilterTextChange(e.target.value)}
+          variant="outlined"
+          size="small"
+        />
       </FilterContainer>
       <TableContainerStyled component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
-              {Object.keys(data[0]).map((key) => (
+              {columnOrder.map((key) => (
                 <TableHeaderCellStyled key={key} onClick={() => handleSort(key)}>
                   {key}
                   {sortConfig.key === key && (sortConfig.direction === 'asc' ? ' ▲' : ' ▼')}
@@ -125,8 +113,8 @@ function TableWithPagination({ data, onRowSelect }) {
                 onClick={() => handleRowClick(row)}
                 selected={selectedRow === row}
               >
-                {Object.values(row).map((value, index) => (
-                  <TableCell key={index}>{value}</TableCell>
+                {columnOrder.map((columnKey, index) => (
+                  <TableCell key={index}>{row[columnKey]}</TableCell>
                 ))}
               </SelectedRow>
             ))}
