@@ -25,7 +25,7 @@ class Compound:
         return {
             "Drug Name": self.compound_name,
             "Pearson R": self.train_corr,
-            "Connectivity": self.num_edges,
+            "Connectivity": self.num_edges / 2,
         }
     
 @app.route("/compounds")

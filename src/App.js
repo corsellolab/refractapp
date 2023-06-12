@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import TableWithPagination from './TableWithPagination';
 import CompoundData from './CompoundData';
+import refractLogo from './assets/refract_logo.png';
+
+const ImageWithText = ({refractLogo}) => {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        width: '75%',
+        margin: '0 auto',
+      }}
+    >
+      <img
+        src={refractLogo}
+        alt="Refract Logo"
+        style={{ marginRight: '10px', width: "5%" }}
+      />
+      <span style={{ textAlign: 'left' }}><h1>Refract Results Viewer</h1></span>
+    </div>
+  );
+};
 
 const App = () => {
   const [selectedRow, setSelectedRow] = useState(null);
@@ -19,6 +40,8 @@ const App = () => {
 
   return (
     <div>
+      <ImageWithText refractLogo={refractLogo} />
+
       {data.length > 0 ? (
         <TableWithPagination data={data} onRowSelect={handleRowSelect} />
       ) : (
