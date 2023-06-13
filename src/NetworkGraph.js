@@ -93,15 +93,22 @@ const NetworkGraph = ({ row }) => {
     <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: "50px" }}>
       <div style={{ width: '75%' }}>
         {row && (
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            {scores.map((scoreItem) => (
-              <button 
-                key={scoreItem.code} 
-                onClick={() => setScore(scoreItem.code)}
-                style={{ backgroundColor: score === scoreItem.code ? 'gray' : 'white', fontWeight: "bold" }}
-              >
-                {scoreItem.name}
-              </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-start'}}>
+          {scores.map((scoreItem) => (
+            <div 
+              key={scoreItem.code} 
+              onClick={() => setScore(scoreItem.code)}
+              style={{ 
+                cursor: 'pointer', 
+                backgroundColor: score === scoreItem.code ? 'lightblue' : 'white',
+                borderRadius: '5px 5px 0 0', 
+                margin: '0 5px', 
+                padding: '10px', 
+                fontWeight: "bold", 
+              }}
+            >
+              {scoreItem.name}
+            </div>
             ))}
           </div>
         )}
