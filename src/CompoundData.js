@@ -37,7 +37,7 @@ const CompoundData = ({ row }) => {
       style={{
         display: 'flex',
         alignItems: 'center',
-        width: '90%',
+        width: '75%',
         margin: '0 auto',
       }}
     >

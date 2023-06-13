@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import TableWithPagination from './TableWithPagination';
 import CompoundData from './CompoundData';
+import NetworkGraph from './NetworkGraph';
 import refractLogo from './assets/refract_logo.png';
 
 const ImageWithText = ({refractLogo}) => {
@@ -48,7 +49,9 @@ const App = () => {
         <p>Loading data...</p>
       )}
       <CompoundData row={selectedRow} />
+      <NetworkGraph row={selectedRow} />
     </div>
+     
   );
 };
 

@@ -37,7 +37,7 @@ def get_compounds():
 @app.route("/<compound>/network")
 def get_network(compound):
     # return the pandas dataframe as html table
-    return COMPOUND_DICT[compound].network.to_html()
+    return COMPOUND_DICT[compound].network.to_json(orient="records")
 
 @app.route("/<compound>/train_results")
 def get_train_results(compound):
