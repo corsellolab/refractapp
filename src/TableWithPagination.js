@@ -121,6 +121,7 @@ function TableWithPagination({ data, onRowSelect }) {
           </TableBody>
         </Table>
       </TableContainerStyled>
+      <TableContainerStyled>
       <TablePagination
         rowsPerPageOptions={[5, 10, 25]}
         component="div"
@@ -130,6 +131,7 @@ function TableWithPagination({ data, onRowSelect }) {
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
       />
+      </TableContainerStyled>
     </div>
   );
 }

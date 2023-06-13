@@ -82,6 +82,10 @@ const NetworkGraph = ({ row }) => {
       };
 
       new Network(container, data, options);
+    } else {
+      // Clear the network by removing all nodes and edges
+      const container = document.getElementById('network');
+      container.innerHTML = '';
     }
   }, [score, graphData]);
 
@@ -103,7 +107,7 @@ const NetworkGraph = ({ row }) => {
         )}
         <div id="network" style={{ 
           width: '100%', 
-          height: '400px', 
+          height: '600px', 
           border: row ? '1px solid black' : 'none' 
         }}></div>
       </div>
