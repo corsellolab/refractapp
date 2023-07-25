@@ -1,14 +1,20 @@
-from flask import Flask, send_file, jsonify
+from flask import Flask, send_file, jsonify, request
 from glob import glob
 import sys
 import os
 import pandas as pd
 from flask_cors import CORS
+from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
 CORS(app)
+bcrypt = Bcrypt(app)
 
-DATA_PATH = "../data/xgboost"
+users = {
+    "nick": bcrypt.generate_password_hash('testpwd').decode('utf-8')
+}
+
+DATA_PATH = "../../data/xgboost_all_features"
 COMPOUND_DICT = {}
 
 class Compound:
@@ -48,8 +54,23 @@ def get_train_results(compound):
 def get_shap(compound):
     return send_file(COMPOUND_DICT[compound].shap_plot, mimetype='image/png')
 
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    print(data)
+
+    username = data.get('username')
+    password = data.get('password')
+
+    # Verify the user exists and the password is correct
+    if username in users and bcrypt.check_password_hash(users[username], password):
+        return jsonify(success=True), 200
+
+    return jsonify(success=False), 401
+
 if __name__ == '__main__':
-    for dir in glob(f"{DATA_PATH}/*"):
-        compound = Compound(dir)
-        COMPOUND_DICT[compound.compound_name] = compound
+    for dir in glob(f"{DATA_PATH}/*/*"):
+        if os.path.exists(f"{dir}/network_interactions.csv"):
+            compound = Compound(dir)
+            COMPOUND_DICT[compound.compound_name] = compound
     app.run()
