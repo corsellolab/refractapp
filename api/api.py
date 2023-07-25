@@ -11,7 +11,8 @@ CORS(app)
 bcrypt = Bcrypt(app)
 
 users = {
-    "nick": bcrypt.generate_password_hash('testpwd').decode('utf-8')
+    "nick": bcrypt.generate_password_hash('testpwd').decode('utf-8'),
+    "steven": bcrypt.generate_password_hash("security_best_practics").decode("utf-8")
 }
 
 DATA_PATH = "../../data/xgboost_all_features"
