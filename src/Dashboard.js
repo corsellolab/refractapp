@@ -32,7 +32,7 @@ const Dashboard = () => {
 
     // Fetch data from API
     useEffect(() => {
-        fetch('http://127.0.0.1:5000/compounds')
+        fetch('/api/compounds')
         .then((response) => response.json())
         .then((data) => setData(data));
     }, []);

@@ -3,11 +3,9 @@ from glob import glob
 import sys
 import os
 import pandas as pd
-from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
-CORS(app)
 bcrypt = Bcrypt(app)
 
 users = {
@@ -35,23 +33,23 @@ class Compound:
             "Connectivity": self.num_edges / 2,
         }
     
-@app.route("/compounds")
+@app.route("/api/compounds")
 def get_compounds():
     """Return a list of all compounds as a dict"""
     out = [compound.to_dict() for compound in COMPOUND_DICT.values()]
     return jsonify(out)
 
-@app.route("/<compound>/network")
+@app.route("/api/<compound>/network")
 def get_network(compound):
     # return the pandas dataframe as html table
     return COMPOUND_DICT[compound].network.to_json(orient="records")
 
-@app.route("/<compound>/train_results")
+@app.route("/api/<compound>/train_results")
 def get_train_results(compound):
     # retunr the image using flask send_file
     return send_file(COMPOUND_DICT[compound].train_results, mimetype='image/png')
 
-@app.route('/<compound>/shap')
+@app.route('/api/<compound>/shap')
 def get_shap(compound):
     return send_file(COMPOUND_DICT[compound].shap_plot, mimetype='image/png')
 

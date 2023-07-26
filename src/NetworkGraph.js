@@ -24,7 +24,7 @@ const NetworkGraph = ({ row }) => {
   // Fetch data from API
   useEffect(() => {
     if (row && row['Drug Name']) {
-      fetch(`http://127.0.0.1:5000/${row['Drug Name']}/network`)
+      fetch(`/api/${row['Drug Name']}/network`)
         .then((response) => response.json())
         .then((data) => setGraphData(data));
     } else {

@@ -7,7 +7,7 @@ const CompoundData = ({ row }) => {
   useEffect(() => {
     if (row && row['Drug Name']) {
       // Fetch train_results image URL
-      fetch(`http://127.0.0.1:5000/${row['Drug Name']}/train_results`)
+      fetch(`/api/${row['Drug Name']}/train_results`)
         .then((response) => response.blob())
         .then((blob) => {
           const url = URL.createObjectURL(blob);
@@ -19,7 +19,7 @@ const CompoundData = ({ row }) => {
         });
 
       // Fetch shap image URL
-      fetch(`http://127.0.0.1:5000/${row['Drug Name']}/shap`)
+      fetch(`/api/${row['Drug Name']}/shap`)
         .then((response) => response.blob())
         .then((blob) => {
           const url = URL.createObjectURL(blob);
