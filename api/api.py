@@ -4,9 +4,14 @@ import sys
 import os
 import pandas as pd
 from flask_bcrypt import Bcrypt
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 bcrypt = Bcrypt(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
 
 users = {
     "nick": bcrypt.generate_password_hash('testpwd').decode('utf-8'),
@@ -15,6 +20,22 @@ users = {
 
 DATA_PATH = "../../data/xgboost_all_features"
 COMPOUND_DICT = {}
+
+class User(UserMixin):
+    def __init__(self, id):
+        self.id = id
+
+    @staticmethod
+    def validate_login(username, password):
+        if username in users and bcrypt.check_password_hash(users[username], password):
+            user = User(username)
+            login_user(user)
+            return user
+        return None
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User(user_id)
 
 class Compound:
     def __init__(self, dir):
@@ -34,22 +55,26 @@ class Compound:
         }
     
 @app.route("/api/compounds")
+@login_required
 def get_compounds():
     """Return a list of all compounds as a dict"""
     out = [compound.to_dict() for compound in COMPOUND_DICT.values()]
     return jsonify(out)
 
 @app.route("/api/<compound>/network")
+@login_required
 def get_network(compound):
     # return the pandas dataframe as html table
     return COMPOUND_DICT[compound].network.to_json(orient="records")
 
 @app.route("/api/<compound>/train_results")
+@login_required
 def get_train_results(compound):
     # retunr the image using flask send_file
     return send_file(COMPOUND_DICT[compound].train_results, mimetype='image/png')
 
 @app.route('/api/<compound>/shap')
+@login_required
 def get_shap(compound):
     return send_file(COMPOUND_DICT[compound].shap_plot, mimetype='image/png')
 
@@ -61,10 +86,11 @@ def login():
     username = data.get('username')
     password = data.get('password')
 
-    # Verify the user exists and the password is correct
-    if username in users and bcrypt.check_password_hash(users[username], password):
-        return jsonify(success=True), 200
+    user = User.validate_login(username, password)
 
+    # Verify the user exists and the password is correct
+    if user:
+        return jsonify(success=True), 200
     return jsonify(success=False), 401
 
 if __name__ == '__main__':
