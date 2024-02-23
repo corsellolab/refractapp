@@ -1,6 +1,5 @@
-from flask import Flask, send_file, jsonify, request
+from flask import Flask, send_file, jsonify, request, session
 from glob import glob
-import sys
 import os
 import pandas as pd
 from flask_bcrypt import Bcrypt
@@ -14,12 +13,13 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 users = {
-    "nick": bcrypt.generate_password_hash('testpwd').decode('utf-8'),
-    "steven": bcrypt.generate_password_hash("security_best_practics").decode("utf-8")
+    "corsellolab": bcrypt.generate_password_hash('stanford').decode('utf-8'),
+    "nick": bcrypt.generate_password_hash("phillips").decode("utf-8"),
 }
 
-DATA_PATH = "../../data/xgboost_all_features"
-COMPOUND_DICT = {}
+RF_DATA_PATH = "../../data/20231023_retrain_large"
+XGBOOST_DATA_PATH = "../../data/final_results/output_final"
+REP1K_DATA_PATH = "../../data/rep1k"
 
 class User(UserMixin):
     def __init__(self, id):
@@ -39,7 +39,11 @@ def load_user(user_id):
 
 class Compound:
     def __init__(self, dir):
-        self.compound_name = os.path.basename(dir)
+        # check if the last part of the basename is a float, if so:
+        if os.path.basename(dir).split("_")[-1].replace(".", "").isdigit():
+            self.compound_name = "_".join(os.path.basename(dir).split("_")[:-1])
+        else:
+            self.compound_name = os.path.basename(dir)
         self.network = pd.read_csv(f"{dir}/network_interactions.csv")
         self.shap_plot = os.path.abspath(f"{dir}/shap_summary_plot.png")
         self.train_results = os.path.abspath(f"{dir}/train_results.png")
@@ -50,52 +54,77 @@ class Compound:
     def to_dict(self):
         return {
             "Drug Name": self.compound_name,
-            "Pearson R": self.train_corr,
+            "Pearson R": "{0:.5f}".format(float(self.train_corr)),
             "Connectivity": self.num_edges / 2,
         }
+
+def load_compounds(path):
+    temp_dict = {}
+    for dir in glob(f"{path}/*"):
+        if os.path.exists(f"{dir}/network_interactions.csv"):
+            compound = Compound(dir)
+            temp_dict[compound.compound_name] = compound
+    return temp_dict
+
+@app.route("/api/setDataset", methods=['POST'])
+@login_required
+def set_dataset():
+    data = request.get_json()
+    dataset = data.get('algorithm')
+    if dataset not in ['Random Forest', 'XGBoost']:
+        return jsonify(success=False, message="Invalid dataset"), 400
     
+    session['current_dataset'] = 'RF' if dataset == 'Random Forest' else 'XGBOOST'
+    return jsonify(success=True, message=f"Dataset set to {dataset}"), 200
+
 @app.route("/api/compounds")
 @login_required
 def get_compounds():
-    """Return a list of all compounds as a dict"""
-    out = [compound.to_dict() for compound in COMPOUND_DICT.values()]
-    return jsonify(out)
+    """Return a list of all compounds as a dict based on the current dataset"""
+    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
+    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
+    return jsonify([compound.to_dict() for compound in tmp_dict.values()])
 
 @app.route("/api/<compound>/network")
 @login_required
 def get_network(compound):
     # return the pandas dataframe as html table
-    return COMPOUND_DICT[compound].network.to_json(orient="records")
+    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
+    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
+    return tmp_dict[compound].network.to_json(orient="records")
 
 @app.route("/api/<compound>/train_results")
 @login_required
 def get_train_results(compound):
-    # retunr the image using flask send_file
-    return send_file(COMPOUND_DICT[compound].train_results, mimetype='image/png')
+    # return the image using flask send_file
+    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
+    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
+    return send_file(tmp_dict[compound].train_results, mimetype='image/png')
 
 @app.route('/api/<compound>/shap')
 @login_required
 def get_shap(compound):
-    return send_file(COMPOUND_DICT[compound].shap_plot, mimetype='image/png')
+    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
+    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
+    return send_file(tmp_dict[compound].shap_plot, mimetype='image/png')
 
-@app.route('/api/login', methods=['POST'])
+@app.route("/api/login", methods=['POST'])
 def login():
     data = request.get_json()
-    print(data)
-
     username = data.get('username')
     password = data.get('password')
-
     user = User.validate_login(username, password)
-
-    # Verify the user exists and the password is correct
     if user:
         return jsonify(success=True), 200
     return jsonify(success=False), 401
 
 if __name__ == '__main__':
-    for dir in glob(f"{DATA_PATH}/*/*"):
-        if os.path.exists(f"{dir}/network_interactions.csv"):
-            compound = Compound(dir)
-            COMPOUND_DICT[compound.compound_name] = compound
+    # Initial load of the default dataset (RF)
+    RF_DICT = load_compounds(RF_DATA_PATH)
+    XGBOOST_DICT = load_compounds(XGBOOST_DATA_PATH)
+    REP1K_DICT = load_compounds(REP1K_DATA_PATH)
+    # combine XGBOOST and REP1K
+    XGBOOST_DICT.update(REP1K_DICT)
+    print(f"Loaded {len(RF_DICT)} compounds for Random Forest")
+    print(f"Loaded {len(XGBOOST_DICT)} compounds for XGBoost")
     app.run()
