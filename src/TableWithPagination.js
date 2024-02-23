@@ -81,7 +81,7 @@ function TableWithPagination({ data, onRowSelect }) {
   const offset = page * rowsPerPage;
   const slicedData = sortedData.slice(offset, offset + rowsPerPage);
 
-  const columnOrder = ['Drug Name', 'Pearson R', 'Connectivity']; // Define the desired column order
+  const columnOrder = ['Drug Name', 'Pearson R', 'Connectivity', "Repurposing Target", "MOA"]; // Define the desired column order
 
   return (
     <div>

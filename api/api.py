@@ -38,31 +38,42 @@ def load_user(user_id):
     return User(user_id)
 
 class Compound:
-    def __init__(self, dir):
+    def __init__(self, dir, drug_df):
         # check if the last part of the basename is a float, if so:
         if os.path.basename(dir).split("_")[-1].replace(".", "").isdigit():
-            self.compound_name = "_".join(os.path.basename(dir).split("_")[:-1])
+            self.compound_name = "_".join(os.path.basename(dir).split("_")[:-1]).lower()
         else:
-            self.compound_name = os.path.basename(dir)
+            self.compound_name = os.path.basename(dir).lower()
         self.network = pd.read_csv(f"{dir}/network_interactions.csv")
         self.shap_plot = os.path.abspath(f"{dir}/shap_summary_plot.png")
         self.train_results = os.path.abspath(f"{dir}/train_results.png")
         with open(f"{dir}/train_corr.txt", "r") as f:
             self.train_corr = f.read()
         self.num_edges = len(self.network)
+        # check if we have a repourposing_target for this drug
+        # if so, set self.repurposing_target and self.MOA
+        if self.compound_name in drug_df['Drug.Name'].values:
+            drug_info = drug_df[drug_df['Drug.Name'] == self.compound_name]
+            self.repurposing_target = str(drug_info['repurposing_target'].values[0])
+            self.MOA = str(drug_info['MOA'].values[0])
+        else:
+            self.repurposing_target = "N/A"
+            self.MOA = "N/A"
 
     def to_dict(self):
         return {
             "Drug Name": self.compound_name,
             "Pearson R": "{0:.5f}".format(float(self.train_corr)),
             "Connectivity": self.num_edges / 2,
+            "Repurposing Target": self.repurposing_target,
+            "MOA": self.MOA
         }
 
-def load_compounds(path):
+def load_compounds(path, drug_df):
     temp_dict = {}
     for dir in glob(f"{path}/*"):
         if os.path.exists(f"{dir}/network_interactions.csv"):
-            compound = Compound(dir)
+            compound = Compound(dir, drug_df)
             temp_dict[compound.compound_name] = compound
     return temp_dict
 
@@ -119,12 +130,22 @@ def login():
     return jsonify(success=False), 401
 
 if __name__ == '__main__':
+    # map the compound to mechanism
+    drug_df = pd.read_csv("../../data/meta/Repurposing_Public_23Q2_Extended_Primary_Compound_List.csv")
+    drug_df['Drug.Name'] = drug_df['Drug.Name'].str.lower()
     # Initial load of the default dataset (RF)
-    RF_DICT = load_compounds(RF_DATA_PATH)
-    XGBOOST_DICT = load_compounds(XGBOOST_DATA_PATH)
-    REP1K_DICT = load_compounds(REP1K_DATA_PATH)
+    RF_DICT = load_compounds(RF_DATA_PATH, drug_df)
+    XGBOOST_DICT = load_compounds(XGBOOST_DATA_PATH, drug_df)
+    REP1K_DICT = load_compounds(REP1K_DATA_PATH, drug_df)
     # combine XGBOOST and REP1K
     XGBOOST_DICT.update(REP1K_DICT)
     print(f"Loaded {len(RF_DICT)} compounds for Random Forest")
     print(f"Loaded {len(XGBOOST_DICT)} compounds for XGBoost")
+    # how many RF_DICT have MOA != None? 
+    moa_count = sum(1 for compound in RF_DICT.values() if compound.MOA != "")
+    print(f"{moa_count} compounds in Random Forest have MOA not equal to None")
+    # how many XGBOOST_DICT have MOA != None?
+    moa_count = sum(1 for compound in XGBOOST_DICT.values() if compound.MOA != "")
+    print(f"{moa_count} compounds in XGBoost have MOA not equal to None")
+
     app.run()
