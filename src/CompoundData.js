@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
-const CompoundData = ({ row }) => {
+const CompoundData = ({ row, dataType }) => {
   const [trainResultsURL, setTrainResultsURL] = useState(null);
   const [shapURL, setShapURL] = useState(null);
 
   useEffect(() => {
     if (row && row['Drug Name']) {
+      // Reset URLs when row changes
+      setTrainResultsURL(null);
+      setShapURL(null);
+
       // Fetch train_results image URL
       fetch(`/api/${row['Drug Name']}/train_results`)
         .then((response) => response.blob())
@@ -15,7 +19,6 @@ const CompoundData = ({ row }) => {
         })
         .catch((error) => {
           console.error('Error fetching train_results image:', error);
-          setTrainResultsURL(null);
         });
 
       // Fetch shap image URL
@@ -27,63 +30,96 @@ const CompoundData = ({ row }) => {
         })
         .catch((error) => {
           console.error('Error fetching shap image:', error);
-          setShapURL(null);
         });
     }
   }, [row]);
 
+  // Cleanup URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      if (trainResultsURL) URL.revokeObjectURL(trainResultsURL);
+      if (shapURL) URL.revokeObjectURL(shapURL);
+    };
+  }, [trainResultsURL, shapURL]);
+
+  if (!row) return null;
+
   return (
-    <div
-      style={{
+    <div style={{
+      marginTop: '20px',
+      padding: '20px',
+      backgroundColor: '#f5f5f5',
+      borderRadius: '8px',
+    }}>
+      <div style={{
         display: 'flex',
-        alignItems: 'center',
-        width: '75%',
-        margin: '0 auto',
-      }}
-    >
-      {row && (
-        <div
-          style={{
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}>
+          <h2>{dataType === 'Drug' ? 'Drug Response' : 'Gene Dependency'}: {row['Drug Name']}</h2>
+          <div style={{
             display: 'flex',
-            justifyContent: 'center',
-            width: '100%',
-          }}
-        >
-          <div style={{ margin: '10px', width: '50%' }}>
-            <h2>{row['Drug Name']}</h2>
+            gap: '20px',
+            flexWrap: 'wrap',
+          }}>
+            <div>
+              <strong>Refract Score:</strong> {row['Refract Pearson R'].toFixed(3)}
+            </div>
+            <div>
+              <strong>Baseline Score:</strong> {row['Baseline Pearson R'].toFixed(3)}
+            </div>
+            <div>
+              <strong>Improvement:</strong> {row['Difference'].toFixed(3)}
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '20px',
+          justifyContent: 'center'
+        }}>
+          <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+            <h3>Prediction Results</h3>
             {trainResultsURL ? (
               <img
                 src={trainResultsURL}
-                alt="Train Results"
+                alt="Prediction Results"
                 style={{
-                  width: '85%',
+                  width: '100%',
                   height: 'auto',
-                  maxWidth: '100%',
-                  display: 'block',
+                  borderRadius: '4px',
                 }}
               />
             ) : (
-              <p>No train_results image available.</p>
+              <p>Loading prediction results...</p>
             )}
           </div>
-          <div style={{ margin: '10px', width: '50%' }}>
+          <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+            <h3>Feature Importance</h3>
             {shapURL ? (
               <img
                 src={shapURL}
-                alt="SHAP"
+                alt="SHAP Values"
                 style={{
-                  width: '85%',
+                  width: '100%',
                   height: 'auto',
-                  maxWidth: '100%',
-                  display: 'block',
+                  borderRadius: '4px',
                 }}
               />
             ) : (
-              <p>No SHAP image available.</p>
+              <p>Loading feature importance...</p>
             )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

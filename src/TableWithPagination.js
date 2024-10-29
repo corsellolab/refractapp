@@ -1,39 +1,22 @@
 import React, { useState } from 'react';
-import { TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination } from '@mui/material';
-import { styled } from '@mui/system';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Paper,
+  TableSortLabel,
+} from '@mui/material';
 
-const TableContainerStyled = styled(TableContainer)`
-  width: 75%;
-  margin: 0 auto;
-  margin-top: 20px;
-`;
-
-const TableHeaderCellStyled = styled(TableCell)`
-  font-weight: bold;
-  cursor: pointer;
-`;
-
-const FilterContainer = styled('div')`
-  display: flex;
-  margin: 0 auto;
-  width: 75%;
-  margin-bottom: 10px;
-`;
-
-const FilterTextField = styled(TextField)`
-  flex: 1;
-`;
-
-const SelectedRow = styled(TableRow)`
-  background-color: #e0e0e0;
-`;
-
-function TableWithPagination({ data, onRowSelect }) {
+const TableWithPagination = ({ data, onRowSelect, dataType }) => {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [filterText, setFilterText] = useState('');
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: '' });
-  const [selectedRow, setSelectedRow] = useState(null);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [orderBy, setOrderBy] = useState('Difference');
+  const [order, setOrder] = useState('desc');
+  const [selectedRowName, setSelectedRowName] = useState(null);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -44,96 +27,107 @@ function TableWithPagination({ data, onRowSelect }) {
     setPage(0);
   };
 
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const handleFilterTextChange = (value) => {
-    setFilterText(value);
+  const handleSort = (property) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
   };
 
   const handleRowClick = (row) => {
-    setSelectedRow(row);
+    setSelectedRowName(row['Drug Name']);
     onRowSelect(row);
   };
 
-  const filteredData = data.filter((row) =>
-    row['Drug Name'].toString().toLowerCase().includes(filterText.toString().toLowerCase())
-  );
-
-  const sortedData = [...filteredData];
-  if (sortConfig.key) {
-    sortedData.sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
-        return sortConfig.direction === 'asc' ? -1 : 1;
+  const sortedData = React.useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aValue = a[orderBy];
+      const bValue = b[orderBy];
+      if (order === 'asc') {
+        return aValue < bValue ? -1 : 1;
+      } else {
+        return bValue < aValue ? -1 : 1;
       }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
-        return sortConfig.direction === 'asc' ? 1 : -1;
-      }
-      return 0;
     });
-  }
-
-  const offset = page * rowsPerPage;
-  const slicedData = sortedData.slice(offset, offset + rowsPerPage);
-
-  const columnOrder = ['Drug Name', 'Pearson R', 'Connectivity', "Repurposing Target", "MOA"]; // Define the desired column order
+  }, [data, order, orderBy]);
 
   return (
-    <div>
-      <FilterContainer>
-        <FilterTextField
-          label="Filter by drug name"
-          value={filterText}
-          onChange={(e) => handleFilterTextChange(e.target.value)}
-          variant="outlined"
-          size="small"
-        />
-      </FilterContainer>
-      <TableContainerStyled component={Paper}>
-        <Table>
+    <Paper style={{ width: '100%', overflow: 'hidden' }}>
+      <TableContainer style={{ maxHeight: 440 }}>
+        <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
-              {columnOrder.map((key) => (
-                <TableHeaderCellStyled key={key} onClick={() => handleSort(key)}>
-                  {key}
-                  {sortConfig.key === key && (sortConfig.direction === 'asc' ? ' ▲' : ' ▼')}
-                </TableHeaderCellStyled>
-              ))}
+              <TableCell>
+                <TableSortLabel
+                  active={orderBy === 'Drug Name'}
+                  direction={orderBy === 'Drug Name' ? order : 'asc'}
+                  onClick={() => handleSort('Drug Name')}
+                >
+                  <strong>{dataType === 'Drug' ? 'Drug Name' : 'Gene Name'}</strong>
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={orderBy === 'Refract Pearson R'}
+                  direction={orderBy === 'Refract Pearson R' ? order : 'asc'}
+                  onClick={() => handleSort('Refract Pearson R')}
+                >
+                  <strong>Refract Score</strong>
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={orderBy === 'Baseline Pearson R'}
+                  direction={orderBy === 'Baseline Pearson R' ? order : 'asc'}
+                  onClick={() => handleSort('Baseline Pearson R')}
+                >
+                  <strong>Baseline Score</strong>
+                </TableSortLabel>
+              </TableCell>
+              <TableCell align="right">
+                <TableSortLabel
+                  active={orderBy === 'Difference'}
+                  direction={orderBy === 'Difference' ? order : 'asc'}
+                  onClick={() => handleSort('Difference')}
+                >
+                  <strong>Improvement</strong>
+                </TableSortLabel>
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {slicedData.map((row, index) => (
-              <SelectedRow
-                key={index}
-                onClick={() => handleRowClick(row)}
-                selected={selectedRow === row}
-              >
-                {columnOrder.map((columnKey, index) => (
-                  <TableCell key={index}>{row[columnKey]}</TableCell>
-                ))}
-              </SelectedRow>
-            ))}
+            {sortedData
+              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+              .map((row, index) => (
+                <TableRow
+                  hover
+                  key={index}
+                  onClick={() => handleRowClick(row)}
+                  style={{ 
+                    cursor: 'pointer',
+                    backgroundColor: row['Drug Name'] === selectedRowName ? '#e3f2fd' : 'inherit'
+                  }}
+                  selected={row['Drug Name'] === selectedRowName}
+                >
+                  <TableCell>{row['Drug Name']}</TableCell>
+                  <TableCell align="right">{row['Refract Pearson R'].toFixed(3)}</TableCell>
+                  <TableCell align="right">{row['Baseline Pearson R'].toFixed(3)}</TableCell>
+                  <TableCell align="right">{row['Difference'].toFixed(3)}</TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
-      </TableContainerStyled>
-      <TableContainerStyled>
+      </TableContainer>
       <TablePagination
-        rowsPerPageOptions={[5, 10, 25]}
+        rowsPerPageOptions={[10, 25, 100]}
         component="div"
-        count={filteredData.length}
+        count={data.length}
         rowsPerPage={rowsPerPage}
         page={page}
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
       />
-      </TableContainerStyled>
-    </div>
+    </Paper>
   );
-}
+};
 
 export default TableWithPagination;
