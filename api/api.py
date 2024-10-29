@@ -123,7 +123,7 @@ class Gene:
         }
 
 @app.route("/api/setDataset", methods=['POST'])
-#@login_required
+@login_required
 def set_dataset():
     data = request.get_json()
     dataset = data.get('algorithm')
@@ -134,7 +134,7 @@ def set_dataset():
     return jsonify(success=True, message=f"Dataset set to {dataset}"), 200
 
 @app.route("/api/compounds")
-#@login_required
+@login_required
 def get_compounds():
     """Return a list of all compounds as a dict based on the current dataset"""
     current_dataset = session.get('current_dataset', 'Drug')  # Default to RF if not set
@@ -142,7 +142,7 @@ def get_compounds():
     return jsonify([compound.to_dict() for compound in tmp_dict.values()])
 
 @app.route("/api/<compound>/train_results")
-#@login_required
+@login_required
 def get_train_results(compound):
     # return the image using flask send_file
     current_dataset = session.get('current_dataset', 'Drug')  # Default to RF if not set
@@ -150,7 +150,7 @@ def get_train_results(compound):
     return send_file(tmp_dict[compound].refract_pred_img, mimetype='image/png')
 
 @app.route('/api/<compound>/shap')
-#@login_required
+@login_required
 def get_shap(compound):
     current_dataset = session.get('current_dataset', 'Drug')  # Default to RF if not set
     tmp_dict = {"Drug": DRUG_DICT, "Gene": GENE_DICT}[current_dataset]
