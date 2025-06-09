@@ -12,9 +12,10 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
+# TODO: get these from environment variables
 users = {
-    "corsellolab": bcrypt.generate_password_hash('stanford').decode('utf-8'),
-    "nick": bcrypt.generate_password_hash("phillips").decode("utf-8"),
+    "corsellolab": bcrypt.generate_password_hash('').decode('utf-8'),
+    "nick": bcrypt.generate_password_hash("").decode("utf-8"),
 }
 
 RF_DATA_PATH = "../../data/20231023_retrain_large"
