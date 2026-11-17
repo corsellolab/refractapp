@@ -1,9 +1,10 @@
-from flask import Flask, send_file, jsonify, request, session
-from glob import glob
+from flask import Flask, send_file, jsonify, request, abort
 import os
-import pandas as pd
+import time
 from flask_bcrypt import Bcrypt
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import LoginManager, UserMixin, login_user, login_required
+
+from data_loader import DataStore, MODELS, DEFAULT_MODEL
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -12,15 +13,31 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
-# TODO: get these from environment variables
-users = {
-    "corsellolab": bcrypt.generate_password_hash('').decode('utf-8'),
-    "nick": bcrypt.generate_password_hash("").decode("utf-8"),
-}
+# Accounts come from REFRACT_USERS, formatted "user1:password1,user2:password2",
+# so no passwords live in the repo.
+def load_users(spec):
+    accounts = {}
+    for entry in spec.split(","):
+        username, sep, password = entry.strip().partition(":")
+        if sep and username and password:
+            accounts[username] = bcrypt.generate_password_hash(password).decode("utf-8")
+    return accounts
 
-RF_DATA_PATH = "../../data/20231023_retrain_large"
-XGBOOST_DATA_PATH = "../../data/final_results/output_final"
-REP1K_DATA_PATH = "../../data/rep1k"
+
+users = load_users(os.environ.get("REFRACT_USERS", ""))
+if not users:
+    print("WARNING: no accounts configured; set REFRACT_USERS='user:password' to enable login")
+
+# The data bundle. Override with DATA_PATH; defaults to data/ at the repo root (gitignored,
+# can be a symlink). RESULTS_PATH can point results/ somewhere else (e.g. an external drive).
+DATA_PATH = os.environ.get(
+    "DATA_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data"),
+)
+RESULTS_PATH = os.environ.get("RESULTS_PATH")
+
+DATA = None  # DataStore, loaded at startup
+
 
 class User(UserMixin):
     def __init__(self, id):
@@ -38,87 +55,107 @@ class User(UserMixin):
 def load_user(user_id):
     return User(user_id)
 
-class Compound:
-    def __init__(self, dir, drug_df):
-        # check if the last part of the basename is a float, if so:
-        if os.path.basename(dir).split("_")[-1].replace(".", "").isdigit():
-            self.compound_name = "_".join(os.path.basename(dir).split("_")[:-1]).lower()
-        else:
-            self.compound_name = os.path.basename(dir).lower()
-        self.network = pd.read_csv(f"{dir}/network_interactions.csv")
-        self.shap_plot = os.path.abspath(f"{dir}/shap_summary_plot.png")
-        self.train_results = os.path.abspath(f"{dir}/train_results.png")
-        with open(f"{dir}/train_corr.txt", "r") as f:
-            self.train_corr = f.read()
-        self.num_edges = len(self.network)
-        # check if we have a repourposing_target for this drug
-        # if so, set self.repurposing_target and self.MOA
-        if self.compound_name in drug_df['Drug.Name'].values:
-            drug_info = drug_df[drug_df['Drug.Name'] == self.compound_name]
-            self.repurposing_target = str(drug_info['repurposing_target'].values[0])
-            self.MOA = str(drug_info['MOA'].values[0])
-        else:
-            self.repurposing_target = "N/A"
-            self.MOA = "N/A"
 
-    def to_dict(self):
-        return {
-            "Drug Name": self.compound_name,
-            "Pearson R": "{0:.5f}".format(float(self.train_corr)),
-            "Connectivity": self.num_edges / 2,
-            "Repurposing Target": self.repurposing_target,
-            "MOA": self.MOA
-        }
+def _endpoint(endpoint_id):
+    if not DATA.has(endpoint_id):
+        abort(404, description=f"Unknown endpoint {endpoint_id}")
+    return endpoint_id
 
-def load_compounds(path, drug_df):
-    temp_dict = {}
-    for dir in glob(f"{path}/*"):
-        if os.path.exists(f"{dir}/network_interactions.csv"):
-            compound = Compound(dir, drug_df)
-            temp_dict[compound.compound_name] = compound
-    return temp_dict
 
-@app.route("/api/setDataset", methods=['POST'])
+def _model():
+    model = request.args.get("model", DEFAULT_MODEL)
+    if model not in MODELS:
+        abort(400, description=f"Unknown model {model}")
+    return model
+
+
+def _send_png(path):
+    if not path or not os.path.exists(path):
+        abort(404, description="Image not found")
+    return send_file(path, mimetype="image/png", max_age=3600)
+
+
+def _or_404(value, what):
+    if value is None:
+        abort(404, description=f"{what} not available")
+    return jsonify(value)
+
+
+@app.route("/api/models")
 @login_required
-def set_dataset():
-    data = request.get_json()
-    dataset = data.get('algorithm')
-    if dataset not in ['Random Forest', 'XGBoost']:
-        return jsonify(success=False, message="Invalid dataset"), 400
-    
-    session['current_dataset'] = 'RF' if dataset == 'Random Forest' else 'XGBOOST'
-    return jsonify(success=True, message=f"Dataset set to {dataset}"), 200
+def get_models():
+    return jsonify(models=MODELS, default=DEFAULT_MODEL)
 
-@app.route("/api/compounds")
-@login_required
-def get_compounds():
-    """Return a list of all compounds as a dict based on the current dataset"""
-    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
-    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
-    return jsonify([compound.to_dict() for compound in tmp_dict.values()])
 
-@app.route("/api/<compound>/network")
+@app.route("/api/endpoints")
 @login_required
-def get_network(compound):
-    # return the pandas dataframe as html table
-    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
-    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
-    return tmp_dict[compound].network.to_json(orient="records")
+def get_endpoints():
+    """Every endpoint in the run, with metadata and Pearson r per model"""
+    return jsonify(DATA.endpoint_list)
 
-@app.route("/api/<compound>/train_results")
-@login_required
-def get_train_results(compound):
-    # return the image using flask send_file
-    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
-    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
-    return send_file(tmp_dict[compound].train_results, mimetype='image/png')
 
-@app.route('/api/<compound>/shap')
+@app.route("/api/endpoints/<endpoint_id>")
 @login_required
-def get_shap(compound):
-    current_dataset = session.get('current_dataset', 'RF')  # Default to RF if not set
-    tmp_dict = {"RF": RF_DICT, "XGBOOST": XGBOOST_DICT}[current_dataset]
-    return send_file(tmp_dict[compound].shap_plot, mimetype='image/png')
+def get_endpoint(endpoint_id):
+    return jsonify(DATA.detail(_endpoint(endpoint_id)))
+
+
+@app.route("/api/endpoints/<endpoint_id>/top_features")
+@login_required
+def get_top_features(endpoint_id):
+    return _or_404(DATA.top_features(_endpoint(endpoint_id), _model()), "Top features")
+
+
+@app.route("/api/endpoints/<endpoint_id>/predictions")
+@login_required
+def get_predictions(endpoint_id):
+    return _or_404(DATA.predictions(_endpoint(endpoint_id), _model()), "Predictions")
+
+
+@app.route("/api/endpoints/<endpoint_id>/plots/<kind>")
+@login_required
+def get_plot(endpoint_id, kind):
+    folder = DATA.endpoint_dir(_endpoint(endpoint_id))
+    if folder is None:
+        abort(404, description="Results folder not downloaded")
+    if kind == "selection":
+        path = os.path.join(folder, "feature_selection", "selection_plot.png")
+    elif kind in ("shap_summary", "pred_vs_actual"):
+        path = os.path.join(folder, "predictive", f"{_model()}_{kind}.png")
+    else:
+        abort(404)
+    return _send_png(path)
+
+
+@app.route("/api/features/search")
+@login_required
+def search_features():
+    return jsonify(DATA.search_features(request.args.get("q", "")))
+
+
+@app.route("/api/features/<feature_id>")
+@login_required
+def get_feature(feature_id):
+    return _or_404(DATA.feature_endpoints(feature_id), f"Feature {feature_id}")
+
+
+@app.route("/api/overview")
+@login_required
+def get_overview():
+    return jsonify(DATA.overview())
+
+
+@app.route("/api/overview/figures/<name>")
+@login_required
+def get_overview_figure(name):
+    return _send_png(DATA.figure_path(name))
+
+
+@app.route("/api/methods")
+@login_required
+def get_methods():
+    return jsonify(DATA.methods())
+
 
 @app.route("/api/login", methods=['POST'])
 def login():
@@ -130,23 +167,18 @@ def login():
         return jsonify(success=True), 200
     return jsonify(success=False), 401
 
-if __name__ == '__main__':
-    # map the compound to mechanism
-    drug_df = pd.read_csv("../../data/meta/Repurposing_Public_23Q2_Extended_Primary_Compound_List.csv")
-    drug_df['Drug.Name'] = drug_df['Drug.Name'].str.lower()
-    # Initial load of the default dataset (RF)
-    RF_DICT = load_compounds(RF_DATA_PATH, drug_df)
-    XGBOOST_DICT = load_compounds(XGBOOST_DATA_PATH, drug_df)
-    REP1K_DICT = load_compounds(REP1K_DATA_PATH, drug_df)
-    # combine XGBOOST and REP1K
-    XGBOOST_DICT.update(REP1K_DICT)
-    print(f"Loaded {len(RF_DICT)} compounds for Random Forest")
-    print(f"Loaded {len(XGBOOST_DICT)} compounds for XGBoost")
-    # how many RF_DICT have MOA != None? 
-    moa_count = sum(1 for compound in RF_DICT.values() if compound.MOA != "")
-    print(f"{moa_count} compounds in Random Forest have MOA not equal to None")
-    # how many XGBOOST_DICT have MOA != None?
-    moa_count = sum(1 for compound in XGBOOST_DICT.values() if compound.MOA != "")
-    print(f"{moa_count} compounds in XGBoost have MOA not equal to None")
 
-    app.run()
+def load_data():
+    global DATA
+    start = time.time()
+    DATA = DataStore(DATA_PATH, RESULTS_PATH)
+    print(
+        f"Loaded {len(DATA.endpoint_list)} endpoints ({len(DATA.local)} with local results) "
+        f"from {DATA.bundle_path} in {time.time() - start:.1f}s"
+    )
+
+
+if __name__ == '__main__':
+    load_data()
+    # Port 5000 is taken by macOS AirPlay Receiver, so default to 5001
+    app.run(port=int(os.environ.get("PORT", 5001)))
